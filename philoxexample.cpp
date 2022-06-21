@@ -56,7 +56,7 @@ int main(int argc, char **argv){
     array<uint64_t, 4> result;
     for(unsigned i=0; i<10; ++i){
         prf1(begin(in), begin(result));
-        in[5]++;
+        in[5]++; // AE: how user will be carefull with overflow?
         cout << i << ": " << result << "\n";
     }
 
@@ -74,7 +74,12 @@ int main(int argc, char **argv){
         cout << "\n";
 
         uint64_t a = 1, b = 2, c = 3, d=4, e=5;
+#if 0 // AE: tried to distinguish seed and counters set up
         auto eng = counter_based_engine<prf_t, 1>({a, b, c, d, e}); // 2^320 distinct engines, each with period 2^66
+#else
+        counter_based_engine<prf_t, 1> eng(e);
+        eng.set_counters({0, a, b, c, d});
+#endif
         eng(); eng();
     }
 
@@ -96,7 +101,16 @@ int main(int argc, char **argv){
             // keyed_prf generator allows the overall algorithm
             // freedom that is not available when using a conventional
             // Random Number Generator.
+#if 0 // AE: changed approach from general state initialization to separate seeding & set_counters
+// rationale: clearer understanding from user's perspective how to modify the state
+// initializer list constructor filled the state: in[counter_0, ..., counter_c, ..., counter_n, key_0, ..., key_n/2-1]
+// from counter_c+1 to the end of the state, set first c counters to 0
+// alternative approach separates seeds (aka keys) from counters
             counter_based_engine<philox4x32_prf, 1> eng{{global_seed, timestep, atomid}};
+#else
+            counter_based_engine<philox4x32_prf, 1> eng(global_seed);
+            eng.set_counters({0, timestep, atomid});
+#endif
             normal_distribution nd;
             auto n1 = nd(eng);
             auto n2 = nd(eng);

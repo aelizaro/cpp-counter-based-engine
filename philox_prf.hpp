@@ -7,7 +7,7 @@
 namespace std{
 
 template<typename UIntType, size_t w, size_t n, size_t r, UIntType ... consts>
-class philox_prf{
+class philox_prf {
     static_assert(w>0);
     static_assert(n==2 || n==4); // FIXME - 8, 16?
     static_assert(sizeof ...(consts) == n);
@@ -17,7 +17,8 @@ public:
     // Differences from P2075R1:
     //   output_value_type and input_value_type instead of result_type
     //   output_word_size and input_word_size instead of word_size
-    
+    // !AE: Why do we need it, it seems to be always same?
+
     using output_value_type = UIntType; // called result_type in P2075R1
     using input_value_type = UIntType;  // called result_type in P2075R1
     static constexpr size_t input_word_size = w; // called word_size in P2075R1

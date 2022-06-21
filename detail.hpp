@@ -40,9 +40,9 @@ template<> struct ui<64>{ using least = uint_least64_t; using fast= uint_fast64_
 template<> struct ui<128>{ using least = __uint128_t; using fast= __uint128_t; }; // DANGER - __uint128_t
 
 template <unsigned w>
-using uint_least = ui<next_stdint(w)>::least;
+using uint_least = typename ui<next_stdint(w)>::least;
 template <unsigned w>
-using uint_fast = ui<next_stdint(w)>::fast;
+using uint_fast = typename ui<next_stdint(w)>::fast;
 
 // Implement w-bit mulhilo with an 2w-wide integer.  If we don't
 // have a 2w-wide integer, we're out of luck.

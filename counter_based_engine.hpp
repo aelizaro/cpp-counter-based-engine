@@ -25,12 +25,12 @@ class counter_based_engine{
     static_assert(prf::output_count > 0);
     //  prf::in_type is std::array-like (subscriptable, has an integral value_type, specializes tuple_size)
 public:
-    using result_type = prf::output_value_type;
-    using seed_value_type = prf::input_value_type;
+    using result_type = typename prf::output_value_type;
+    using seed_value_type = typename prf::input_value_type;
     static constexpr size_t word_size = prf::output_word_size;
     static constexpr size_t counter_count = c;
     static constexpr size_t counter_word_size = prf::input_word_size;
-    static constexpr size_t seed_count = prf::input_count - counter_count;
+    static constexpr size_t seed_count = prf::input_count - counter_count; // may not be needed in this format, as we have separate set_counters
     static constexpr size_t seed_word_size = prf::input_word_size;
 private:
     using prf_result_type = array<result_type, prf::output_count>;
@@ -38,7 +38,7 @@ private:
 
     static constexpr size_t input_count = prf::input_count;
     static constexpr size_t input_word_size = prf::input_word_size;
-    using input_value_type = prf::input_value_type;
+    using input_value_type = typename prf::input_value_type;
     using in_type = array<input_value_type, input_count>;
     static_assert(integral<input_value_type>);
 
@@ -89,7 +89,7 @@ public:
     // min, max
     static constexpr result_type min(){ return 0; }
     static constexpr result_type max(){ return result_mask; };
-    static constexpr result_type default_seed = 20111115u;
+    static constexpr result_type default_seed = 20111115u; // AE: Default seed should be moved to prf
     // operator()
     result_type operator()(){
 #if 0
@@ -256,6 +256,8 @@ public:
     // and corresponding constructor?
     
     // Constructors and seed members from from a 'seed-range'
+
+#if 0 // AE: reworked by adding set_counters function
     template <integral T>
     explicit counter_based_engine(initializer_list<T> il){
         seed(il);
@@ -264,11 +266,12 @@ public:
     void seed(initializer_list<T> il){
         seed(ranges::subrange(il));
     }
-    
+
     template <detail::integral_input_range InRange>
     explicit counter_based_engine(InRange iv){
         seed(iv);
     }
+
     template <detail::integral_input_range InRange>
     void seed(InRange _in){
         // copy _in to in:
@@ -279,7 +282,6 @@ public:
         set_counter(in, 0);
         ridxref() = 0;
     }
-    
 
     // Additional possible extensions:
     //
@@ -290,7 +292,30 @@ public:
     // - a const operator[](ull N) that returns the Nth value,
     //   leaving the state alone.
     // - a seek(ull) method to set the internal counter.
-    
+
+#else
+public:
+    void set_counters(std::initializer_list<result_type> counters) {
+        auto start = counters.begin();
+        auto end = counters.end();
+        for(size_t i = 0; i < result_count; i++) {
+            in[i] = (start == end) ? 0 : (*start++) & in_mask; // all counters are set
+        }
+    }
+ 
+private:
+    template <detail::integral_input_range InRange>
+    void seed(InRange _in){
+        // copy _in to in:
+        auto inp = ranges::begin(_in);
+        auto ine = ranges::end(_in);
+        for(size_t i=counter_count; i<input_count; ++i)
+            in[i] = (inp == ine) ? 0 : seed_value_type(*inp++) & in_mask; // ?? throw if *inp > in_mask??
+        set_counter(in, 0);
+        ridxref() = 0;
+    }
+#endif
+
 };
 
 using philox2x32 = counter_based_engine<philox2x32_prf, 2>;

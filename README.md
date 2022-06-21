@@ -320,31 +320,27 @@ sequences.  The "SeedSeq" interface is both painfully slow and
 appears to be prone to collisions (e.g., knuth_b(seed_seq({13122}))
 and knuth_b(seed_seq({28597})).
 
-This proposal therefore specifies additional constructor and seed
+This proposal therefore specifies additional set_counters and seed
 member functions that give the program more direct control over the
 invocation of the underlying PRF:
 
 - a typedef-name:  prf_type - the type of the underlying PRF.
 
-- A constructor and corresponding `seed` member function that take
-  an `input_range` (or `initializer list`) argument.   The values
-  in the input range are copied directly into all but the first
+- `set_counters` member function that take
+  an  `initializer list` argument. The values
+  in the list are copied directly into all but the first
   CounterWords elements of the engine's internal `iv` array.
 
   For example,
 
       using eng_t = counter_based_engine<philox4x64_prf>
-      uint64_t a = ..., b= ..., c = ..., d = ..., e = ...;   // 2^320 distinct engines
-      eng_t eng1({a,b,c,d,e});  // initializer_list
-   
-      eng_t eng2; // default-constructed
-      array<uint64_t, 5> abcde = {a, b, c, d, e};
-      eng2.seed(abcde);        // range
-      
-      assert(eng1 == eng2);
+      uint64_t a = ..., b= ..., c = ..., d = ...;
+      eng_t eng1;
+      eng1.set_counters({a,b,c,d});  // initializer_list
 
-  When using these members, the program gains direct control the
-  values stored in the iv and passed to the PRF.  By taking such
+      // AE: Do we need set the whole state by one function?
+
+  When using this member funtion, the program gains direct control the
+  values stored in the state and passed to the PRF.  By taking such
   control, the program takes responsibility for avoiding undesirable
   collisions.
-
