@@ -7,6 +7,7 @@ template<typename UIntType, std::size_t w, std::size_t n, std::size_t r, std::si
 class philox_engine {
     static_assert((c > 0) && (c <= n));
     static_assert(n > 0);
+    static_assert(sizeof...(consts) == n);
 
     // Exposition only
     static constexpr std::size_t s_box_count = n / 2; // keys_count
@@ -20,9 +21,9 @@ public:
     static constexpr std::size_t word_count  = n;
     static constexpr std::size_t round_count = r;
     static constexpr size_t counter_count = c;
-    
-    static constexpr std::array<result_type, word_count> mc = {consts...};
-    //static constexpr std::array<result_type, s_box_count> round_consts; // Need to separate them from consts...
+
+    static constexpr std::array<result_type, s_box_count> multipliers = detail::get_even_array_from_tuple<UIntType>(std::make_tuple(consts...), std::make_index_sequence<s_box_count>{});
+    static constexpr std::array<result_type, s_box_count> round_consts = detail::get_odd_array_from_tuple<UIntType>(std::make_tuple(consts...), std::make_index_sequence<s_box_count>{});
     static constexpr result_type default_seed = 20111115u;
 
 private:
@@ -158,10 +159,10 @@ private:
                 result_type L0 = (*initer++) & in_mask;
                 result_type K0 = (*initer++) & in_mask;
                 for(size_t i = 0; i < round_count; ++i){
-                    auto [hi, lo] = detail::mulhilo<word_size>(R0, mc[0]);
+                    auto [hi, lo] = detail::mulhilo<word_size>(R0, multipliers[0]);
                     R0 = hi^K0^L0;
                     L0 = lo;
-                    K0 = (K0+mc[1]) & in_mask;
+                    K0 = (K0+round_consts[0]) & in_mask;
                 }
                 *output++ = R0;
                 *output++ = L0;
@@ -173,14 +174,14 @@ private:
                 result_type K0 = (*initer++) & in_mask;
                 result_type K1 = (*initer++) & in_mask;
                 for(size_t i=0; i<r; ++i){
-                    auto [hi0, lo0] = detail::mulhilo<word_size>(R0, mc[0]);
-                    auto [hi1, lo1] = detail::mulhilo<word_size>(R1, mc[2]);
+                    auto [hi0, lo0] = detail::mulhilo<word_size>(R0, multipliers[0]);
+                    auto [hi1, lo1] = detail::mulhilo<word_size>(R1, multipliers[1]);
                     R0 = hi1^L0^K0;
                     L0 = lo1;
                     R1 = hi0^L1^K1;
                     L1 = lo0;
-                    K0 = (K0 + mc[1]) & in_mask;
-                    K1 = (K1 + mc[3]) & in_mask;
+                    K0 = (K0 + round_consts[0]) & in_mask;
+                    K1 = (K1 + round_consts[1]) & in_mask;
                 }
                 *output++ = R0;
                 *output++ = L0;

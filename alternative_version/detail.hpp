@@ -10,6 +10,8 @@
 #pragma once
 #include <concepts>
 #include <iterator>
+#include <utility>
+#include <tuple>
 
 namespace detail {
 
@@ -51,5 +53,16 @@ static std::pair<U, U> mulhilo(U a, U b){
 template <std::unsigned_integral U, unsigned W>
 requires (W <= std::numeric_limits<U>::digits)
 constexpr U fffmask = W ? (U(~(U(0))) >> (std::numeric_limits<U>::digits - W)) : 0;
+
+// For unpacking variadic of constants into two arrays:
+template<typename UIntType, typename Tuple, size_t ... Is>
+constexpr auto get_even_array_from_tuple(Tuple t, std::index_sequence<Is...>) {
+    return std::array<UIntType, std::index_sequence<Is...>::size()>{std::get<Is * 2>(t)...};
+}
+
+template<typename UIntType, typename Tuple, size_t ... Is>
+constexpr auto get_odd_array_from_tuple(Tuple t, std::index_sequence<Is...>) {
+    return std::array<UIntType, std::index_sequence<Is...>::size()>{std::get<Is * 2 + 1>(t)...};
+}
 
 } // namespace detail
