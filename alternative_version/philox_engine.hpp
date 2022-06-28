@@ -62,7 +62,7 @@ public:
 
     template <class Sseq>
     void seed(Sseq& seed) {
-        // TODO
+        seed.generate(state_.begin(), state_.end());
     }
 
     // generating functions
