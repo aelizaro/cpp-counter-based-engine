@@ -11,7 +11,7 @@ class philox_engine {
     static_assert(sizeof...(consts) == n);
 
     // Exposition only
-    static constexpr std::size_t s_box_count = n / 2; // keys_count
+    static constexpr std::size_t key_count = n / 2; // keys_count
 
 public:
     // types
@@ -21,14 +21,14 @@ public:
     static constexpr std::size_t word_size = w;
     static constexpr std::size_t word_count = n;
     static constexpr std::size_t round_count = r;
-    static constexpr size_t counter_count = c;
+    static constexpr size_t period_counter_count = c;
 
-    static constexpr std::array<result_type, s_box_count> multipliers =
+    static constexpr std::array<result_type, key_count> multipliers =
         detail::get_even_array_from_tuple<UIntType>(std::make_tuple(consts...),
-                                                    std::make_index_sequence<s_box_count>{});
-    static constexpr std::array<result_type, s_box_count> round_consts =
+                                                    std::make_index_sequence<key_count>{});
+    static constexpr std::array<result_type, key_count> round_consts =
         detail::get_odd_array_from_tuple<UIntType>(std::make_tuple(consts...),
-                                                   std::make_index_sequence<s_box_count>{});
+                                                   std::make_index_sequence<key_count>{});
     static constexpr result_type default_seed = 20111115u;
 
 private:
@@ -94,9 +94,9 @@ public:
         ridxref() = newridx;
     }
 
-    void set_counters(std::initializer_list<result_type> counters) {
-        auto start = counters.begin();
-        auto end = counters.end();
+    void set_counter(std::initializer_list<result_type> counter) {
+        auto start = counter.begin();
+        auto end = counter.end();
         for (size_t i = 0; i < word_count; i++) {
             state_[i] = (start == end) ? 0 : (*start++) & in_mask; // all counters are set
         }
@@ -112,23 +112,23 @@ public:
 private:
     // methods to manipulate counters
     using counter_type =
-        detail::uint_fast<counter_count * word_size>; // WARNING: doesn't scale for word_count > 4
+        detail::uint_fast<period_counter_count * word_size>; // WARNING: doesn't scale for word_count > 4
 
     counter_type get_counter_internal() const { // need to check
         std::uint64_t ret = 0;
-        for (size_t i = 0; i < counter_count; ++i) {
+        for (size_t i = 0; i < period_counter_count; ++i) {
             ret |= std::uint64_t(state_[i]) << (word_size * i);
         }
         return ret;
     }
     void set_counter_internal(state& s, counter_type newctr) { // need to check
-        static_assert(word_size * counter_count <= std::numeric_limits<counter_type>::digits);
-        for (size_t i = 0; i < counter_count; ++i)
+        static_assert(word_size * period_counter_count <= std::numeric_limits<counter_type>::digits);
+        for (size_t i = 0; i < period_counter_count; ++i)
             s[i] = (newctr >> (word_size * i)) & in_mask;
     }
     void increase_counter_internal() { // need to check
         state_[0] = (state_[0] + 1) & in_mask;
-        for (size_t i = 1; i < counter_count; ++i) {
+        for (size_t i = 1; i < period_counter_count; ++i) {
             if (state_[i - 1]) {
                 [[likely]] return;
             }

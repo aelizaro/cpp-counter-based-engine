@@ -1,3 +1,5 @@
+// clang++ -std=gnu++2a -Wall  test.cpp
+
 #include <iostream>
 #include "philox_engine.hpp"
 
@@ -44,7 +46,7 @@ int main() {
 
     std::cout << "\nSet counters check: " << std::endl;
     engine.seed(7777);
-    engine.set_counters({ 1, 0, 0, 0 });
+    engine.set_counter({ 1, 0, 0, 0 });
 
     for (int i = 0; i < n - discard; i++) {
         out4[i] = engine();
