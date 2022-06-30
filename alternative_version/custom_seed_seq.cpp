@@ -54,33 +54,54 @@ private:
 };
 
 int main() {
-    constexpr size_t n = 20;
+    {
+        constexpr size_t n = 20;
 
-    constexpr size_t discard = 8;
+        constexpr size_t discard = 8;
 
-    philox4x32 engine(7777);
+        philox4x32 engine(7777);
 
-    std::array<typename philox4x32::result_type, n> out1;
-    std::array<typename philox4x32::result_type, n - discard> out2;
+        std::array<typename philox4x32::result_type, n> out1;
+        std::array<typename philox4x32::result_type, n - discard> out2;
 
-    std::cout << "Reference output:" << std::endl;
-    for (int i = 0; i < n; i++) {
-        out1[i] = engine();
-        std::cout << out1[i] << " ";
-    }
+        std::cout << "Reference output:" << std::endl;
+        for (int i = 0; i < n; i++) {
+            out1[i] = engine();
+            std::cout << out1[i] << " ";
+        }
 
-    std::cout << "\nSeed reset:" << std::endl;
-    int counter = discard / philox4x32::word_count;
-    custom_seed_seq seq{ counter, 0, 0, 0, 7777 };
-    engine.seed(seq); // NB: Counters are set to 0!
+        std::cout << "\nSeed reset:" << std::endl;
+        int counter = discard / philox4x32::word_count;
+        custom_seed_seq seq{ counter, 0, 0, 0, 7777 };
+        engine.seed(seq); // NB: Counters are set to 0!
 
-    for (int i = 0; i < n - discard; i++) {
-        out2[i] = engine();
-        std::cout << out2[i] << " ";
-        if (out1[i + discard] != out2[i]) {
-            std::cout << "\nresults mismatch: " << out1[i] << " " << out2[i] << std::endl;
+        for (int i = 0; i < n - discard; i++) {
+            out2[i] = engine();
+            std::cout << out2[i] << " ";
+            if (out1[i + discard] != out2[i]) {
+                std::cout << "\nresults mismatch: " << out1[i] << " " << out2[i] << std::endl;
+            }
         }
     }
 
+    // to check John's results
+    {
+        constexpr size_t n = 4;
+        std::cout << "\nOutput check for philox4x32" << std::endl;
+
+        custom_seed_seq seq(std::initializer_list<typename philox4x32::result_type>{
+            0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344, 0xa4093822, 0x299f31d0 });
+        std::array<typename philox4x32::result_type, n> ref_out = { 0xd16cfe09, 0x94fdcceb,
+                                                                    0x5001e420, 0x24126ea1 };
+        philox4x32 engine(seq);
+        for (int i = 0; i < n; i++) {
+            auto res = engine();
+            if (res != ref_out[i]) {
+                std::cout << "\nresults mismatch: " << res << " " << ref_out[i] << std::endl;
+                return 1;
+            }
+        }
+        std::cout << "Passed" << std::endl;
+    }
     return 0;
 }
