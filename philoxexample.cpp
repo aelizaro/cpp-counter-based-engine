@@ -55,7 +55,7 @@ int main(int argc, char **argv){
     array<uint64_t, 6> in{};  // in full generality, array<prf_t::input_value_type, prf_t::input_count>
     array<uint64_t, 4> result;
     for(unsigned i=0; i<10; ++i){
-        prf1(begin(in), begin(result));
+        prf1(in, result);
         in[5]++; // AE: how user will be carefull with overflow?
         cout << i << ": " << result << "\n";
     }
@@ -66,20 +66,21 @@ int main(int argc, char **argv){
         using prf_t = philox4x64_prf;
         static const size_t Nin  = 3;
         array<prf_t::input_value_type, prf_t::input_count> in[Nin] = {{1,2,3,4,5,6}, {7,8, 9,10,11,12}, {13,14,15,16,17,18}};
-        uint64_t out[Nin*prf_t::output_count]; // 12 values
-        prf_t{}.generate(in | views::transform([](auto& a){return begin(a);}), begin(out));
+        prf_t::output_value_type out[Nin*prf_t::output_count]; // 12 values
+        
+        // AE: moved public api to span
+        // prf_t{}.generate(in | views::transform([](auto& a){return begin(a);}), begin(out));
+        for(size_t i = 0; i < Nin; i++) {
+            prf_t{}(in[i], std::span<prf_t::output_value_type, prf_t::output_count>{out + i * prf_t::output_count, prf_t::output_count});
+        }
         cout << "Random values obtained directly from philox4x64_prf: ";
         for(const auto o : out)
             cout << o << " ";
         cout << "\n";
 
         uint64_t a = 1, b = 2, c = 3, d=4, e=5;
-#if 0 // AE: tried to distinguish seed and counters set up
-        auto eng = counter_based_engine<prf_t, 1>({a, b, c, d, e}); // 2^320 distinct engines, each with period 2^66
-#else
         counter_based_engine<prf_t, 1> eng(e);
         eng.set_counters({0, a, b, c, d});
-#endif
         eng(); eng();
     }
 
@@ -101,16 +102,8 @@ int main(int argc, char **argv){
             // keyed_prf generator allows the overall algorithm
             // freedom that is not available when using a conventional
             // Random Number Generator.
-#if 0 // AE: changed approach from general state initialization to separate seeding & set_counters
-// rationale: clearer understanding from user's perspective how to modify the state
-// initializer list constructor filled the state: in[counter_0, ..., counter_c, ..., counter_n, key_0, ..., key_n/2-1]
-// from counter_c+1 to the end of the state, set first c counters to 0
-// alternative approach separates seeds (aka keys) from counters
-            counter_based_engine<philox4x32_prf, 1> eng{{global_seed, timestep, atomid}};
-#else
-            counter_based_engine<philox4x32_prf, 1> eng(global_seed);
+            counter_based_engine<philox4x32_prf, 1> eng(static_cast<typename philox4x32_prf::output_value_type>(global_seed));
             eng.set_counters({0, timestep, atomid});
-#endif
             normal_distribution nd;
             auto n1 = nd(eng);
             auto n2 = nd(eng);

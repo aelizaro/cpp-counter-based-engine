@@ -1,8 +1,10 @@
 #pragma once
 
-#include "detail.hpp" // a couple of helpful functions and concepts
 #include <array>
 #include <ranges>
+#include <span>
+
+#include "detail.hpp"
 
 namespace std{
 
@@ -17,7 +19,6 @@ public:
     // Differences from P2075R1:
     //   output_value_type and input_value_type instead of result_type
     //   output_word_size and input_word_size instead of word_size
-    // !AE: Why do we need it, it seems to be always same?
 
     using output_value_type = UIntType; // called result_type in P2075R1
     using input_value_type = UIntType;  // called result_type in P2075R1
@@ -26,11 +27,22 @@ public:
     static constexpr size_t input_count = 3*n/2;
     static constexpr size_t output_count = n;
 
+private:
+    static constexpr auto result_mask = detail::fffmask<output_value_type,
+                                                        std::min<size_t>(numeric_limits<output_value_type>::digits, output_word_size)>;
+public:
+    static constexpr output_value_type min(){ return 0; }
+    static constexpr output_value_type max(){ return result_mask; };
+
     // In P2075R1 this returns void, but it makes more sense to return
     // the "final" OutputIterator2
-    template<typename InputIterator1, typename OutputIterator2>
-    OutputIterator2 operator()(InputIterator1 input, OutputIterator2 output){
-        return generate(ranges::single_view(input), output);
+    // template<typename InputIterator1, typename OutputIterator2>
+    // OutputIterator2 operator()(InputIterator1 input, OutputIterator2 output){
+    //     return generate(ranges::single_view(input), output);
+    // }
+
+    void operator()(std::span<input_value_type, input_count> input, std::span<output_value_type, output_count> output){
+        generate(ranges::single_view(input.data()), output.data());
     }
 
     // This is a candidate for the "iterator-based API" for bulk generation.  (Not in P2075R1)

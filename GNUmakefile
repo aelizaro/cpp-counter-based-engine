@@ -2,7 +2,7 @@
 #
 # use -std=gnu++20 so numeric_limits<__uint128_t> "works"
 CXXFLAGS+=-std=gnu++2a -Wall
-CXXFLAGS+=-fconcepts-diagnostics-depth=5
+# CXXFLAGS+=-fconcepts-diagnostics-depth=5
 CFLAGS+=-Wall
 OPT?=-O3 # if not set on the command line
 CXXFLAGS+=$(OPT)
@@ -10,7 +10,7 @@ CFLAGS+=$(OPT)
 TARGET_ARCH+=-pthread # for philoxbench
 TARGET_ARCH+=-march=native
 
-all: philoxexample tests bench
+all: philoxexample tests #bench
 
 threefry.o : CPPFLAGS+=-I/u/nyc/salmonj/g/gardenfs/core123/include
 

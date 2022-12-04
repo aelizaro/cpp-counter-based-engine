@@ -11,43 +11,72 @@
 #include "threefry_prf.hpp"
 #include "philox_prf.hpp"
 
-namespace std{
+namespace std {
 
-template<typename prf, size_t c>
-class counter_based_engine{
+// What happens if we want operator() of Prf to be templated
+// template<class Prf, class InputRange, class OutputIterator>
+// concept pseudo_random_function = std::input_range<InputRange> &&
+// std::sized_range<InputRange> && std::output_iterator<OutputIterator> && requires(Prf prf, InputRange range, OutputIterator o) {
+//     typename Prf::result_type;
+//     Prf::word_size;
+//     Prf::input_count;
+//     Prf::output_count;
+//     { Prf::min() } -> same_as<typename Prf::result_type>;
+//     { Prf::max() } -> same_as<typename Prf::result_type>;
+//     { prf(range, o) } -> std::output_iterator;
+// };
+//
+// It pollutes counter_based_engine template parameters:
+// template< std::sized_range InputRange, std::output_iterator OutputIterator, pseudo_random_function<InputRange, OutputIterator>, size_t c>
+// class counter_based_engine;
+//
+
+template<class Prf>
+concept pseudo_random_function = requires(Prf prf, span<typename Prf::input_value_type, Prf::input_count> in, span<typename Prf::output_value_type, Prf::output_count> out) {
+    typename Prf::input_value_type;
+    typename Prf::output_value_type;
+    Prf::input_word_size;
+    Prf::output_word_size;
+    Prf::input_count;
+    Prf::output_count;
+    { Prf::min() } -> same_as<typename Prf::output_value_type>;
+    { Prf::max() } -> same_as<typename Prf::output_value_type>;
+    prf(in, out);
+};
+
+template<pseudo_random_function prf, size_t c>
+class counter_based_engine {
     static_assert(numeric_limits<typename prf::output_value_type>::max() >= prf::output_count);
     static_assert(c > 0);
-    // FIXME! static_assert(c * prf::input_word_size <= numeric_limits<uintmax_t>::digits); // could be relaxed with more code
-    // assertions that should be part of a prf concept:
     static_assert(prf::input_word_size > 0);
-    // Question:  should it be possible for the input and output input_word_size to be different?
     static_assert(prf::output_word_size > 0);
     static_assert(prf::output_count > 0);
-    //  prf::in_type is std::array-like (subscriptable, has an integral value_type, specializes tuple_size)
+
 public:
     using result_type = typename prf::output_value_type;
     using seed_value_type = typename prf::input_value_type;
     static constexpr size_t word_size = prf::output_word_size;
     static constexpr size_t counter_count = c;
     static constexpr size_t counter_word_size = prf::input_word_size;
-    static constexpr size_t seed_count = prf::input_count - counter_count; // may not be needed in this format, as we have separate set_counters
+    static constexpr size_t seed_count = prf::input_count - counter_count;
     static constexpr size_t seed_word_size = prf::input_word_size;
 private:
     using prf_result_type = array<result_type, prf::output_count>;
-    static constexpr size_t result_count = prf::output_count;
 
+    static constexpr size_t result_count = prf::output_count;
     static constexpr size_t input_count = prf::input_count;
     static constexpr size_t input_word_size = prf::input_word_size;
+
     using input_value_type = typename prf::input_value_type;
     using in_type = array<input_value_type, input_count>;
+
     static_assert(integral<input_value_type>);
 
     static constexpr auto in_mask = detail::fffmask<input_value_type, prf::input_word_size>;
-    static constexpr auto result_mask = detail::fffmask<result_type,
-                                                        std::min<size_t>(numeric_limits<result_type>::digits, word_size)>;
 
-    in_type in;
+    in_type in; // state
     prf_result_type results;
+
     // To save space, store the index of the next result to be returned in the 0th results slot.
     const auto& ridxref() const {
         return results[0];
@@ -56,24 +85,22 @@ private:
         return results[0];
     }
 
-    // Some methods to manipulate a (possibly) multi-word counter in
-    // the first few elements of in[].  An integral counter_type isn't
-    // strictly necessary.  We could do all the counter arithmetic by
-    // carefully carrying bits between the first few counter_count
-    // elements of in[].  But this is a lot easier.
-    // WARNING:  the code is poorly tested.
+
     using counter_type = detail::uint_fast<c*prf::input_word_size>;
+
     counter_type get_counter() const{
         uint64_t ret = 0;
         for(size_t i=0; i<counter_count; ++i)
             ret |= uint64_t(in[i])<<(input_word_size * i);
         return ret;
     }
+
     static void set_counter(in_type& inn, counter_type newctr){
         static_assert(input_word_size * counter_count <= numeric_limits<counter_type>::digits);
         for(size_t i=0; i<counter_count; ++i)
             inn[i] = (newctr >> (input_word_size*i)) & in_mask;
     }
+
     void incr_counter(){
         in[0] = (in[0] + 1) & in_mask;
         for(size_t i=1; i<counter_count; ++i){
@@ -84,44 +111,23 @@ private:
     }
 
 public:
-    // First, satisfy the requirements for a uniform_random_bit_generator
-    // result_type - defined above
-    // min, max
-    static constexpr result_type min(){ return 0; }
-    static constexpr result_type max(){ return result_mask; };
-    static constexpr result_type default_seed = 20111115u; // AE: Default seed should be moved to prf
-    // operator()
+
+    static constexpr result_type min(){ return prf::min(); }
+    static constexpr result_type max(){ return prf::max(); };
+    static constexpr result_type default_seed = 20111115u; // AE: Default seed should be moved to prf?
+
+
     result_type operator()(){
-#if 0
-        // N.B.  Writing it out doesn't seem to be an faster than
-        // letting the compiler optimize away all the loops
-        // in the bulk-generation overload.
-        auto ri = ridxref();
-        if(ri == 0){
-            // call prf and increment ctr
-            prf{}(begin(in), begin(results));
-            incr_counter();
-        }
-        result_type ret = results[ri++];
-        if(ri == result_count)
-            ri = 0;
-        ridxref() = ri;
-        return ret;
-#else
         result_type ret;
         (*this)(&ret, &ret+1);
-        return ret;
-#endif        
+        return ret;   
     }
-            
-    // constraints borrowed from ranges::fill ??
-    // FIXME - overflow checking.  If we do it,
-    // then the overflow behavior should be as if
-    // we had done:
-    //     while(n--) *out++ = (*this)();
-    // Worth the trouble?
+
+
+private:
+
     template <output_iterator<const result_type&> O, sized_sentinel_for<O> S>
-    O operator()(O out, S sen){
+    O operator()(O out, S sen) {
         auto n = sen - out;
         
         // Deliver any saved results
@@ -148,13 +154,14 @@ public:
                                                   set_counter(inn, ctr);
                                                   return ranges::begin(inn);
                                               }),
-                             out);
+                             out); // TODO: rework it to span api
+
         n -= nprf*result_count;
         set_counter(in, c0 + nprf);
 
         // Restock the results array
         if(ri == 0 && n){
-            prf{}(std::begin(in), std::begin(results));
+            prf{}(in, results);
             incr_counter();
         }
             
@@ -164,21 +171,24 @@ public:
         ridxref() = ri;
         return out;
     }
+public:
 
-    // And now, the requirements for a random number engine:
-    // constructors, seed and assignment methods:
+
     counter_based_engine() : counter_based_engine(default_seed){}
+
     explicit counter_based_engine(result_type s){ seed(s); }
+
     void seed(result_type value = default_seed){
         array<seed_value_type, seed_count> K = { input_value_type(value) & in_mask };
-        seed(K);
+        seed_internal(K);
     }
-    template <typename SeedSeq> // FIXME - disambiguate result_type
+
+    template <typename SeedSeq>
     explicit counter_based_engine(SeedSeq& q){ seed(q); }
-    template <typename SeedSeq> // FIXME - disambiguate result_type
+
+
+    template <typename SeedSeq>
     void seed(SeedSeq& s){
-        // Generate 32-bits at a time with the SeedSeq.
-        // Generate enough to fill prf::in
         constexpr size_t N32_per_in = (input_word_size-1)/32 + 1;
         array<uint_fast32_t, N32_per_in * seed_count> k32;
         s.generate(k32.begin(), k32.end());
@@ -192,7 +202,7 @@ public:
             v &= in_mask;
         }            
 
-        seed(iv);
+        seed_internal(iv);
     }
 
     // (in)equality operators
@@ -214,7 +224,7 @@ public:
         set_counter(in, newctr);
         if(newridx){
             if(jumpctr)
-                prf{}(begin(in), begin(results));
+                prf{}(in, results);
             incr_counter();
         }else if(newctr == 0){
             newridx = result_count;
@@ -239,7 +249,7 @@ public:
         result_type ridx;
         is >> ridx;
         if(ridx)
-            prf{}(begin(p.in), begin(p.results));
+            prf{}(p.in, p.results);
         p.ridxref() = ridx;
         return is;
     }
@@ -257,43 +267,6 @@ public:
     
     // Constructors and seed members from from a 'seed-range'
 
-#if 0 // AE: reworked by adding set_counters function
-    template <integral T>
-    explicit counter_based_engine(initializer_list<T> il){
-        seed(il);
-    }
-    template <integral T>
-    void seed(initializer_list<T> il){
-        seed(ranges::subrange(il));
-    }
-
-    template <detail::integral_input_range InRange>
-    explicit counter_based_engine(InRange iv){
-        seed(iv);
-    }
-
-    template <detail::integral_input_range InRange>
-    void seed(InRange _in){
-        // copy _in to in:
-        auto inp = ranges::begin(_in);
-        auto ine = ranges::end(_in);
-        for(size_t i=counter_count; i<input_count; ++i)
-            in[i] = (inp == ine) ? 0 : seed_value_type(*inp++) & in_mask; // ?? throw if *inp > in_mask??
-        set_counter(in, 0);
-        ridxref() = 0;
-    }
-
-    // Additional possible extensions:
-    //
-    // - a method to get the iv.
-    // - methods that return the sequence length and how many calls are left.  N.B.  these
-    //   would need a way to return a value larger than numeric_limits<uintmax_t>::max().
-    // - a rewind() method (the opposite of discard).
-    // - a const operator[](ull N) that returns the Nth value,
-    //   leaving the state alone.
-    // - a seek(ull) method to set the internal counter.
-
-#else
 public:
     void set_counters(std::initializer_list<result_type> counters) {
         auto start = counters.begin();
@@ -305,7 +278,7 @@ public:
  
 private:
     template <detail::integral_input_range InRange>
-    void seed(InRange _in){
+    void seed_internal(InRange _in){
         // copy _in to in:
         auto inp = ranges::begin(_in);
         auto ine = ranges::end(_in);
@@ -314,8 +287,6 @@ private:
         set_counter(in, 0);
         ridxref() = 0;
     }
-#endif
-
 };
 
 using philox2x32 = counter_based_engine<philox2x32_prf, 2>;
@@ -323,9 +294,9 @@ using philox4x32 = counter_based_engine<philox4x32_prf, 2>;
 using philox2x64 = counter_based_engine<philox2x64_prf, 1>;
 using philox4x64 = counter_based_engine<philox4x64_prf, 1>;
 
-using threefry2x32 = counter_based_engine<threefry2x32_prf, 2>;
-using threefry4x32 = counter_based_engine<threefry4x32_prf, 2>;
-using threefry2x64 = counter_based_engine<threefry2x64_prf, 1>;
-using threefry4x64 = counter_based_engine<threefry4x64_prf, 1>;
+// using threefry2x32 = counter_based_engine<threefry2x32_prf, 2>;
+// using threefry4x32 = counter_based_engine<threefry4x32_prf, 2>;
+// using threefry2x64 = counter_based_engine<threefry2x64_prf, 1>;
+// using threefry4x64 = counter_based_engine<threefry4x64_prf, 1>;
 
 } // namespace std
