@@ -17,16 +17,18 @@
 #include <array>
 #include <ranges>
 #include <cstring>
+#include <algorithm>
 
-extern "C"{
+extern "C" {
 // see siphash.c
-int siphash(const uint8_t *in, const size_t inlen, const uint8_t *k,
-            uint8_t *out, const size_t outlen);
+int siphash(const uint8_t *in, const size_t inlen, const uint8_t *k, uint8_t *out,
+            const size_t outlen);
 }
 
 template <size_t n>
-class siphash_prf{
+class siphash_prf {
     static_assert(n > 2);
+
 public:
     // The API in siphash.c is expressed in terms of uint8_t.  But
     // the algorithm is "really" expressed in terms of 64-bit
@@ -42,28 +44,28 @@ public:
     // types, so there's no need jump through the hoops that would be
     // required if we tried to use uint_least8_t and uint_least64_t
     // instead.
-    
-    template<typename InputIterator1, typename OutputIterator2>
-    OutputIterator2 operator()(InputIterator1 input, OutputIterator2 output){
+
+    template <typename InputIterator1, typename OutputIterator2>
+    OutputIterator2 operator()(InputIterator1 input, OutputIterator2 output) {
         return generate(std::ranges::single_view(input), output);
     }
 
     // Ignore endian issues!  This code will produce different
-    // results on machines with different endian.  
+    // results on machines with different endian.
     template <std::ranges::input_range InRange, std::weakly_incrementable O>
-    requires std::ranges::sized_range<InRange> &&
-             std::integral<std::iter_value_t<std::ranges::range_value_t<InRange>>> &&
-             std::integral<std::iter_value_t<O>> &&
-             std::indirectly_writable<O, std::iter_value_t<O>>
-    O generate(InRange&& inrange, O result) const{
-        for(auto in : inrange){
+    requires std::ranges::sized_range<InRange>
+        &&std::integral<std::iter_value_t<std::ranges::range_value_t<InRange>>> &&
+            std::integral<std::iter_value_t<O>> &&std::indirectly_writable<O, std::iter_value_t<O>>
+                O generate(InRange &&inrange, O result) const {
+        for (auto in : inrange) {
             uint64_t out[2];
-            // Call siphash with the first 16 bytes (in[0] and in[1]) 
+            // Call siphash with the first 16 bytes (in[0] and in[1])
             // as the key and the rest (in[2], ... ) as the message.
-            uint64_t key[2] = {*in++, *in++};
-            uint64_t msg[input_count-2];
-            std::copy_n(in, input_count-2, msg);
-            siphash(16+(uint8_t*)&key[0], sizeof(msg), (uint8_t*)&msg[0], (uint8_t*)&out[0], sizeof(out));
+            uint64_t key[2] = { *in++, *in++ };
+            uint64_t msg[input_count - 2];
+            std::copy_n(in, input_count - 2, msg);
+            siphash(16 + (uint8_t *)&key[0], sizeof(msg), (uint8_t *)&msg[0], (uint8_t *)&out[0],
+                    sizeof(out));
             *result++ = out[0];
             *result++ = out[1];
         }

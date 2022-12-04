@@ -36,29 +36,30 @@
 // worried about the clock's steadiness.
 using clk_t = std::chrono::high_resolution_clock;
 
-struct timeit_result{
+struct timeit_result {
     long long count;
     clk_t::duration dur;
-    timeit_result(long long count_, const clk_t::duration& dur_):
-        count(count_), dur(dur_)
-    {}
-    timeit_result() : timeit_result(0, {}){}
-    float iter_per_sec() const { return count/std::chrono::duration<float>(dur).count(); }
-    float sec_per_iter() const { return std::chrono::duration<float>(dur).count()/count; }
+    timeit_result(long long count_, const clk_t::duration& dur_) : count(count_), dur(dur_) {}
+    timeit_result() : timeit_result(0, {}) {}
+    float iter_per_sec() const {
+        return count / std::chrono::duration<float>(dur).count();
+    }
+    float sec_per_iter() const {
+        return std::chrono::duration<float>(dur).count() / count;
+    }
 };
 
 template <class Rep, class Period, class Functor>
-timeit_result
-timeit(const std::chrono::duration<Rep, Period>& dur, Functor f){
+timeit_result timeit(const std::chrono::duration<Rep, Period>& dur, Functor f) {
     std::atomic<bool> done(false);
-    std::thread t( [&](){
-            std::this_thread::sleep_for(dur);
-            done.store(1);
-        });
-    
+    std::thread t([&]() {
+        std::this_thread::sleep_for(dur);
+        done.store(1);
+    });
+
     long long n = 0;
     auto start = clk_t::now();
-    do{
+    do {
         // Unrolling this produced very confusing results.  Any f()
         // that's fast enough that the overhead of n++ and
         // !done.load() is significant seems to also be small enough
@@ -68,8 +69,8 @@ timeit(const std::chrono::duration<Rep, Period>& dur, Functor f){
         // inside f() if it matters...
         f();
         n++;
-    }while(!done.load());
+    } while (!done.load());
     auto elapsed = clk_t::now() - start;
     t.join();
-    return {n, elapsed};
+    return { n, elapsed };
 }
