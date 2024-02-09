@@ -157,11 +157,6 @@ private:
         return results_[0];
     }
 
-    template <typename InputIterator, typename OutputIterator>
-    OutputIterator operator()(InputIterator input, OutputIterator output) {
-        return generate(std::ranges::single_view(input), output);
-    }
-
     template <std::ranges::input_range InRange, std::weakly_incrementable Output>
     requires std::ranges::sized_range<InRange> &&
         std::integral<std::iter_value_t<std::ranges::range_value_t<InRange>>> &&
@@ -214,6 +209,8 @@ private:
     Output operator()(Output out, Sentinel sen) {
         auto len = sen - out;
 
+        //std::cout << "len = " << len << std::endl;
+
         // Deliver any saved results
         auto ri = ridxref();
         if (ri && len) {
@@ -227,6 +224,8 @@ private:
 
         // Call the bulk generator
         auto nprf = len / word_count;
+
+        //std::cout << "nprf = " << nprf << std::endl;
         // lazily construct the input range.  No need
         // to allocate and fill a big chunk of memory
         auto c0 = get_counter_internal();
@@ -243,7 +242,8 @@ private:
 
         // Restock the results array
         if (ri == 0 && len) {
-            (*this)(std::begin(state_), std::begin(results_));
+            // (*this)(std::begin(state_), std::begin(results_));
+            generate(std::ranges::single_view(state_.data()), results_.data());
             increase_counter_internal();
         }
 

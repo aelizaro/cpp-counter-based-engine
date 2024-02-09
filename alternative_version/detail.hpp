@@ -12,6 +12,7 @@
 #include <iterator>
 #include <utility>
 #include <tuple>
+#include <limits>
 
 namespace detail {
 
